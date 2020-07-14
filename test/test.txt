@@ -1,0 +1,5 @@
+This is a test.
+
+This file contains only US-ASCII characters, so it's a very basic test.
+
+Hi!
