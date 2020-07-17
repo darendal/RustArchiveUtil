@@ -12,6 +12,15 @@
       <sourceFolder url="file://$MODULE_DIR$/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/archive_library/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/archive-library/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/archive-library/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/archive-library/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/archive_library/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/archive_library/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/archive_library/benches" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/archive-library/target" />
+      <excludeFolder url="file://$MODULE_DIR$/archive_library/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

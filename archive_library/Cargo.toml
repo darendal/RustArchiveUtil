@@ -1,0 +1,8 @@
+[package]
+name = "archive_library"
+version = "0.1.0"
+authors = ["Brendan Ware"]
+edition = "2018"
+
+[dependencies]
+users = "0.10.0"

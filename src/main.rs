@@ -1,3 +1,5 @@
+extern crate archive_library;
+
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::{env, process};
@@ -13,7 +15,7 @@ fn main() {
         Some(path) => path,
     };
 
-    if valid_path(filepath.as_path()) {
+    if !valid_path(filepath.as_path()) {
         eprintln!(
             "{} - Parameter {:?}: File does not exist",
             UTIL_NAME, filepath
@@ -21,7 +23,7 @@ fn main() {
         process::exit(1);
     }
 
-    println!("{:?}", filepath);
+    archive_library::tar::Tar::new(filepath);
 }
 
 fn fetch_path(args: Vec<OsString>) -> Option<PathBuf> {
