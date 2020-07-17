@@ -15,6 +15,17 @@ const BLOCK_SIZE: usize = 512;
 const NAME_SIZE: usize = 100;
 const PREFIX_SIZE: usize = 155;
 
+// Mode octal values.
+// Used to control permissions on created files.
+const SET_UID: u64 = 0o04000;
+const SET_GID: u64 = 0o02000;
+const READ_BY_OWNER: u64 = 0o00400;
+const WRITE_BY_OWNER: u64 = 0o00200;
+const READ_BY_GROUP: u64 = 0o00040;
+const WRITE_BY_GROUP: u64 = 0o00020;
+const READ_BY_OTHER: u64 = 0o00004;
+const WRITE_BY_OTHER: u64 = 0o00002;
+
 pub struct Tar {
     files: Vec<TarRecord>,
 }
@@ -43,7 +54,7 @@ impl Tar {
 #[derive(Debug)]
 struct TarRecord {
     name: String,
-    mode: Mode,
+    mode: Vec<u64>,
     user_id: u64,
     group_id: u64,
     size: u64,          // size of the file in bytes
@@ -52,7 +63,6 @@ struct TarRecord {
     linkname: String,
     username: String,
     group_name: String,
-    prefix: Vec<char>,
     file: File,
 }
 
@@ -64,12 +74,10 @@ impl TarRecord {
         let file = File::open(path.clone()).unwrap();
         let metadata = file.metadata().unwrap();
 
-        let mode = Mode::WriteByOwner;
         let user_id = metadata.st_uid();
         let group_id = metadata.st_gid();
         let size = metadata.len();
         let modified_time = metadata.st_mtime();
-        let checksum = 0u64;
         let type_flag = TypeFlag::ARegFile;
 
         let username = get_user_by_uid(user_id).unwrap();
@@ -77,7 +85,7 @@ impl TarRecord {
 
         TarRecord {
             name: name.to_str().unwrap().to_string(),
-            mode,
+            mode: vec![READ_BY_OWNER, WRITE_BY_OWNER, READ_BY_GROUP, READ_BY_OTHER],
             user_id: user_id as u64,
             group_id: group_id as u64,
             size,
@@ -86,7 +94,6 @@ impl TarRecord {
             linkname: "".to_string(),
             username: username.name().to_str().unwrap().to_string(),
             group_name: group_name.name().to_str().unwrap().to_string(),
-            prefix: vec![],
             file,
         }
     }
@@ -115,18 +122,19 @@ impl TarRecord {
     }
 
     fn write_header(&self, writer: &mut impl Write) {
-
-        let mut vec_writer : Vec<u8> = Vec::new();
-
+        let mut vec_writer: Vec<u8> = Vec::new();
+        let mode: u64 = self.mode.iter().sum();
         // Write all elements of the header to the vector
         write!(vec_writer, "{:\0<100}", self.name);
-        write!(vec_writer, "{:06o} \0", 420u64);
+        write!(vec_writer, "{:06o} \0", mode);
         write!(vec_writer, "{:06o} \0", self.user_id);
         write!(vec_writer, "{:06o} \0", self.group_id);
         write!(vec_writer, "{:011o} ", self.size);
         write!(vec_writer, "{:011o} ", self.modified_time);
+
         // Set checksum to 0 before calculating it.
         write!(vec_writer, "{:06o}\0 ", 0);
+
         write!(vec_writer, "{}", self.type_flag as u8);
         write!(vec_writer, "{:\0<100}", self.linkname);
         write!(vec_writer, "{:\0<6}", TAR_MAGIC);
@@ -138,16 +146,12 @@ impl TarRecord {
         write!(vec_writer, "{:\0<size$}", "", size = PREFIX_SIZE);
 
         let sum: u64 = vec_writer.iter().map(|&x| x as u64).sum();
-
-        println!("{:06o}", sum - 64);
-
         let mut checksum: Vec<u8> = Vec::new();
-
+        // FIXME: Due to an off-by-one error somewhere above, the checksum is always too high.
+        // For now, manually subtract 64 from the sum to get a valid checksum.
         write!(checksum, "{:06o}\0 ", sum - 64);
 
-        let mut slice1 = &mut vec_writer[148..156];
-
-        slice1.swap_with_slice(&mut checksum[0..8]);
+        &mut vec_writer[148..156].swap_with_slice(&mut checksum[0..8]);
 
         writer.write_all(&vec_writer);
 
@@ -155,19 +159,6 @@ impl TarRecord {
         // Write 12 nulls to fill the block before moving on.
         write!(writer, "{:\0<size$}", "", size = 12);
     }
-}
-
-#[repr(u64)]
-#[derive(Debug, Copy, Clone)]
-enum Mode {
-    SetUid = 0o04000,
-    SetGid = 0o02000,
-    ReadByOwner = 0o00400,
-    WriteByOwner = 0o00200,
-    ReadByGroup = 0o00040,
-    WriteByGroup = 0o00020,
-    ReadByOther = 0o00002,
-    WriteByOther = 0o00001,
 }
 
 #[repr(u8)]
