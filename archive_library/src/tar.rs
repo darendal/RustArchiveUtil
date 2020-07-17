@@ -1,7 +1,7 @@
-use std::fs::{File};
+use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::macos::fs::MetadataExt;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use users::{get_group_by_gid, get_user_by_uid};
 
 const TAR_MAGIC: &str = "ustar\0";
@@ -37,16 +37,22 @@ impl Tar {
 
         let record = TarRecord::new(path.clone());
 
-        let mut result_path = path.clone();
+        Tar {
+            files: vec![record],
+        }
+    }
+
+    pub fn write_tar(&self, path: &mut PathBuf) {
+        let mut result_path = path;
         result_path.set_extension("tar");
         let mut writer = BufWriter::new(File::create(result_path).unwrap());
 
-        record.write_record(&mut writer);
+        self.files
+            .iter()
+            .for_each(|record| record.write_record(&mut writer));
 
         // write 2 empty blocks to signify end of TAR
         write!(writer, "{:\0<size$}", "", size = BLOCK_SIZE * 2);
-
-        Tar { files: Vec::new() }
     }
 }
 
@@ -99,9 +105,11 @@ impl TarRecord {
 
     pub fn write_record(&self, writer: &mut impl Write) {
         self.write_header(writer);
+        self.write_file(writer)
+    }
 
+    fn write_file(&self, writer: &mut impl Write) -> () {
         let mut reader = BufReader::new(&self.file);
-
         loop {
             let buf = reader.fill_buf().unwrap();
             let len = buf.len();
@@ -112,9 +120,7 @@ impl TarRecord {
 
             reader.consume(len)
         }
-
         let residual = BLOCK_SIZE - (self.size as usize % BLOCK_SIZE);
-
         if residual != BLOCK_SIZE {
             write!(writer, "{:\0<size$}", "", size = residual);
         }
@@ -123,26 +129,30 @@ impl TarRecord {
     fn write_header(&self, writer: &mut impl Write) {
         let mut vec_writer: Vec<u8> = Vec::new();
         let mode: u64 = self.mode.iter().sum();
+
         // Write all elements of the header to the vector
-        write!(vec_writer, "{:\0<100}", self.name);
-        write!(vec_writer, "{:06o} \0", mode);
-        write!(vec_writer, "{:06o} \0", self.user_id);
-        write!(vec_writer, "{:06o} \0", self.group_id);
-        write!(vec_writer, "{:011o} ", self.size);
-        write!(vec_writer, "{:011o} ", self.modified_time);
-
-        // Set checksum to 0 before calculating it.
-        write!(vec_writer, "{:06o}\0 ", 0);
-
-        write!(vec_writer, "{}", self.type_flag as u8);
-        write!(vec_writer, "{:\0<100}", self.linkname);
-        write!(vec_writer, "{:\0<6}", TAR_MAGIC);
-        write!(vec_writer, "{:02}", TAR_VERSION);
-        write!(vec_writer, "{:\0<32}", self.username);
-        write!(vec_writer, "{:\0<32}", self.group_name);
-        write!(vec_writer, "{:06o} \0", DEV_MAJOR_VERSION);
-        write!(vec_writer, "{:06o} \0", DEV_MINOR_VERSION);
-        write!(vec_writer, "{:\0<size$}", "", size = PREFIX_SIZE);
+        write!(
+            vec_writer,
+            "{name:\0<name_size$}{mode:06o} \0{user_id:06o} \0{group_id:06o} \0{size:011o} {modified_time:011o} {checksum:06o}\0 {typeflag}{linkname:\0<100}{magic:\0<6}{version:02}{username:\0<32}{group_name:\0<32}{dev_major:06o} \0{dev_minor:06o} \0{prefix:\0<prefix_size$}",
+            name = self.name,
+            name_size = NAME_SIZE,
+            mode = mode,
+            user_id = self.user_id,
+            group_id = self.group_id,
+            size = self.size,
+            modified_time = self.modified_time,
+            checksum = 0,
+            typeflag = self.type_flag as u8,
+            linkname = self.linkname,
+            magic = TAR_MAGIC,
+            version = TAR_VERSION,
+            username = self.username,
+            group_name = self.group_name,
+            dev_major = DEV_MAJOR_VERSION,
+            dev_minor = DEV_MINOR_VERSION,
+            prefix = "",
+            prefix_size = PREFIX_SIZE,
+        );
 
         let sum: u64 = vec_writer.iter().map(|&x| x as u64).sum();
         let mut checksum: Vec<u8> = Vec::new();
@@ -150,8 +160,7 @@ impl TarRecord {
         // For now, manually subtract 64 from the sum to get a valid checksum.
         write!(checksum, "{:06o}\0 ", sum - 64);
 
-        &mut vec_writer[148..156].swap_with_slice(&mut checksum[0..8]);
-
+        &mut vec_writer[148..156].swap_with_slice(&mut checksum[0..]);
         writer.write_all(&vec_writer);
 
         // Header is exactly 12 bytes shy of a single block.

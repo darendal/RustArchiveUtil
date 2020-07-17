@@ -14,7 +14,7 @@ fn main() {
         }
         Some(path) => path,
     };
-
+    let mut destination = filepath.clone();
     if !valid_path(filepath.as_path()) {
         eprintln!(
             "{} - Parameter {:?}: File does not exist",
@@ -23,7 +23,9 @@ fn main() {
         process::exit(1);
     }
 
-    archive_library::tar::Tar::new(filepath);
+    let tar = archive_library::tar::Tar::new(filepath);
+
+    tar.write_tar(&mut destination)
 }
 
 fn fetch_path(args: Vec<OsString>) -> Option<PathBuf> {
