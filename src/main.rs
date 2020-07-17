@@ -25,7 +25,14 @@ fn main() {
 
     let tar = archive_library::tar::Tar::new(filepath);
 
-    tar.write_tar(&mut destination)
+    match tar.write_tar(&mut destination) {
+        Ok(_) => process::exit(0),
+        Err(e) => {
+            eprintln!("Error writing tar: {}", e);
+            process::exit(1);
+        },
+    };
+
 }
 
 fn fetch_path(args: Vec<OsString>) -> Option<PathBuf> {

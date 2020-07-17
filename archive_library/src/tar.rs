@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::macos::fs::MetadataExt;
 use std::path::PathBuf;
 use users::{get_group_by_gid, get_user_by_uid};
+use std::io;
 
 const TAR_MAGIC: &str = "ustar\0";
 const TAR_VERSION: u32 = 0u32;
@@ -42,17 +43,17 @@ impl Tar {
         }
     }
 
-    pub fn write_tar(&self, path: &mut PathBuf) {
-        let mut result_path = path;
+    pub fn write_tar(&self, path: &mut PathBuf) -> Result<(), io::Error>{
+        let result_path = path;
         result_path.set_extension("tar");
         let mut writer = BufWriter::new(File::create(result_path).unwrap());
 
-        self.files
-            .iter()
-            .for_each(|record| record.write_record(&mut writer));
+        for record in self.files.iter() {
+            record.write_record(&mut writer)?
+        }
 
         // write 2 empty blocks to signify end of TAR
-        write!(writer, "{:\0<size$}", "", size = BLOCK_SIZE * 2);
+        write!(writer, "{:\0<size$}", "", size = BLOCK_SIZE * 2)
     }
 }
 
@@ -103,30 +104,32 @@ impl TarRecord {
         }
     }
 
-    pub fn write_record(&self, writer: &mut impl Write) {
-        self.write_header(writer);
+    pub fn write_record(&self, writer: &mut impl Write) -> Result<(), io::Error> {
+        self.write_header(writer)?;
         self.write_file(writer)
     }
 
-    fn write_file(&self, writer: &mut impl Write) -> () {
+    fn write_file(&self, writer: &mut impl Write) -> Result<(), io::Error> {
         let mut reader = BufReader::new(&self.file);
         loop {
-            let buf = reader.fill_buf().unwrap();
+            let buf = reader.fill_buf()?;
             let len = buf.len();
             if buf.len() == 0 {
                 break;
             }
-            writer.write_all(buf);
+            writer.write_all(buf)?;
 
             reader.consume(len)
         }
         let residual = BLOCK_SIZE - (self.size as usize % BLOCK_SIZE);
         if residual != BLOCK_SIZE {
-            write!(writer, "{:\0<size$}", "", size = residual);
+            write!(writer, "{:\0<size$}", "", size = residual)?;
         }
+
+        return Ok(());
     }
 
-    fn write_header(&self, writer: &mut impl Write) {
+    fn write_header(&self, writer: &mut impl Write) -> Result<(), io::Error> {
         let mut vec_writer: Vec<u8> = Vec::new();
         let mode: u64 = self.mode.iter().sum();
 
@@ -152,20 +155,20 @@ impl TarRecord {
             dev_minor = DEV_MINOR_VERSION,
             prefix = "",
             prefix_size = PREFIX_SIZE,
-        );
+        )?;
 
         let sum: u64 = vec_writer.iter().map(|&x| x as u64).sum();
         let mut checksum: Vec<u8> = Vec::new();
         // FIXME: Due to an off-by-one error somewhere above, the checksum is always too high.
         // For now, manually subtract 64 from the sum to get a valid checksum.
-        write!(checksum, "{:06o}\0 ", sum - 64);
+        write!(checksum, "{:06o}\0 ", sum - 64)?;
 
         &mut vec_writer[148..156].swap_with_slice(&mut checksum[0..]);
-        writer.write_all(&vec_writer);
+        writer.write_all(&vec_writer)?;
 
         // Header is exactly 12 bytes shy of a single block.
         // Write 12 nulls to fill the block before moving on.
-        write!(writer, "{:\0<size$}", "", size = 12);
+        write!(writer, "{:\0<size$}", "", size = 12)
     }
 }
 
