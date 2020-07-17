@@ -1,9 +1,9 @@
 use std::fs::File;
+use std::io;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::macos::fs::MetadataExt;
 use std::path::PathBuf;
 use users::{get_group_by_gid, get_user_by_uid};
-use std::io;
 
 const TAR_MAGIC: &str = "ustar\0";
 const TAR_VERSION: u32 = 0u32;
@@ -14,17 +14,6 @@ const BLOCK_SIZE: usize = 512;
 
 const NAME_SIZE: usize = 100;
 const PREFIX_SIZE: usize = 155;
-
-// Mode octal values.
-// Used to control permissions on created files.
-const SET_UID: u64 = 0o04000;
-const SET_GID: u64 = 0o02000;
-const READ_BY_OWNER: u64 = 0o00400;
-const WRITE_BY_OWNER: u64 = 0o00200;
-const READ_BY_GROUP: u64 = 0o00040;
-const WRITE_BY_GROUP: u64 = 0o00020;
-const READ_BY_OTHER: u64 = 0o00004;
-const WRITE_BY_OTHER: u64 = 0o00002;
 
 pub struct Tar {
     files: Vec<TarRecord>,
@@ -43,7 +32,7 @@ impl Tar {
         }
     }
 
-    pub fn write_tar(&self, path: &mut PathBuf) -> Result<(), io::Error>{
+    pub fn write_tar(&self, path: &mut PathBuf) -> Result<(), io::Error> {
         let result_path = path;
         result_path.set_extension("tar");
         let mut writer = BufWriter::new(File::create(result_path).unwrap());
@@ -60,7 +49,7 @@ impl Tar {
 #[derive(Debug)]
 struct TarRecord {
     name: String,
-    mode: Vec<u64>,
+    mode: u64,
     user_id: u64,
     group_id: u64,
     size: u64,          // size of the file in bytes
@@ -91,7 +80,10 @@ impl TarRecord {
 
         TarRecord {
             name: name.to_str().unwrap().to_string(),
-            mode: vec![READ_BY_OWNER, WRITE_BY_OWNER, READ_BY_GROUP, READ_BY_OTHER],
+            mode: Mode::READ_BY_OWNER.bits
+                | Mode::WRITE_BY_OWNER.bits
+                | Mode::READ_BY_GROUP.bits
+                | Mode::READ_BY_OTHER.bits,
             user_id: user_id as u64,
             group_id: group_id as u64,
             size,
@@ -131,7 +123,6 @@ impl TarRecord {
 
     fn write_header(&self, writer: &mut impl Write) -> Result<(), io::Error> {
         let mut vec_writer: Vec<u8> = Vec::new();
-        let mode: u64 = self.mode.iter().sum();
 
         // Write all elements of the header to the vector
         write!(
@@ -139,7 +130,7 @@ impl TarRecord {
             "{name:\0<name_size$}{mode:06o} \0{user_id:06o} \0{group_id:06o} \0{size:011o} {modified_time:011o} {checksum:06o}\0 {typeflag}{linkname:\0<100}{magic:\0<6}{version:02}{username:\0<32}{group_name:\0<32}{dev_major:06o} \0{dev_minor:06o} \0{prefix:\0<prefix_size$}",
             name = self.name,
             name_size = NAME_SIZE,
-            mode = mode,
+            mode = self.mode,
             user_id = self.user_id,
             group_id = self.group_id,
             size = self.size,
@@ -172,8 +163,22 @@ impl TarRecord {
     }
 }
 
+bitflags! {
+    struct Mode: u64 {
+        const SET_UID = 0o04000;
+        const SET_GID = 0o02000;
+        const READ_BY_OWNER = 0o00400;
+        const WRITE_BY_OWNER = 0o00200;
+        const READ_BY_GROUP = 0o00040;
+        const WRITE_BY_GROUP = 0o00020;
+        const READ_BY_OTHER = 0o00004;
+        const WRITE_BY_OTHER = 0o00002;
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, Copy, Clone)]
+#[allow(dead_code)]
 enum TypeFlag {
     RegFile = b'0',
     ARegFile = b'\0',

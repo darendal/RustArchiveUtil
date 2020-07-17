@@ -30,9 +30,8 @@ fn main() {
         Err(e) => {
             eprintln!("Error writing tar: {}", e);
             process::exit(1);
-        },
+        }
     };
-
 }
 
 fn fetch_path(args: Vec<OsString>) -> Option<PathBuf> {

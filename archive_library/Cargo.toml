@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 users = "0.10.0"
+bitflags = "1.2.1"
