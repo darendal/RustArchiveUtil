@@ -1,8 +1,7 @@
-use std::fs::{read, File};
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::fs::{File};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::macos::fs::MetadataExt;
-use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::path::{PathBuf};
 use users::{get_group_by_gid, get_user_by_uid};
 
 const TAR_MAGIC: &str = "ustar\0";
