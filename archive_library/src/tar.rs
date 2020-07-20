@@ -4,6 +4,8 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::macos::fs::MetadataExt;
 use std::path::PathBuf;
 use users::{get_group_by_gid, get_user_by_uid};
+use walkdir::{WalkDir, DirEntry};
+use std::os::unix::fs::PermissionsExt;
 
 const TAR_MAGIC: &str = "ustar\0";
 const TAR_VERSION: u32 = 0u32;
@@ -22,7 +24,16 @@ pub struct Tar {
 impl Tar {
     pub fn new(path: PathBuf) -> Tar {
         if path.is_dir() {
-            panic!("Currently no support for directories");
+            let files: Vec<TarRecord> = WalkDir::new(path)
+                .into_iter()
+                .filter_entry(|e| !Tar::is_hidden(e))
+                .filter_map(|e| e.ok())
+                .map(|file| TarRecord::new(file.into_path()))
+                .collect();
+
+            println!("{:?}", files);
+
+            return Tar { files };
         }
 
         let record = TarRecord::new(path.clone());
@@ -30,6 +41,13 @@ impl Tar {
         Tar {
             files: vec![record],
         }
+    }
+
+    fn is_hidden(entry: &DirEntry) -> bool {
+        entry.file_name()
+            .to_str()
+            .map(|s| s.starts_with("."))
+            .unwrap_or(false)
     }
 
     pub fn write_tar(&self, path: &mut PathBuf) -> Result<(), io::Error> {
@@ -71,9 +89,9 @@ impl TarRecord {
 
         let user_id = metadata.st_uid();
         let group_id = metadata.st_gid();
-        let size = metadata.len();
+        let size = if path.is_dir() {0}  else {metadata.len()};
         let modified_time = metadata.st_mtime();
-        let type_flag = TypeFlag::ARegFile;
+        let type_flag = if path.is_dir() {TypeFlag::Directory} else {TypeFlag::ARegFile};
 
         let username = get_user_by_uid(user_id).unwrap();
         let group_name = get_group_by_gid(group_id).unwrap();
@@ -98,7 +116,13 @@ impl TarRecord {
 
     pub fn write_record(&self, writer: &mut impl Write) -> Result<(), io::Error> {
         self.write_header(writer)?;
-        self.write_file(writer)
+
+        if self.type_flag != TypeFlag::Directory {
+            self.write_file(writer)
+        } else {
+            Ok(())
+        }
+
     }
 
     fn write_file(&self, writer: &mut impl Write) -> Result<(), io::Error> {
@@ -177,7 +201,7 @@ bitflags! {
 }
 
 #[repr(u8)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 #[allow(dead_code)]
 enum TypeFlag {
     RegFile = b'0',
