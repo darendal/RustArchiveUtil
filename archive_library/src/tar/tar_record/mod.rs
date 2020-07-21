@@ -107,7 +107,7 @@ impl TarRecord {
         // Write all elements of the header to the vector
         write!(
             vec_writer,
-            "{name:\0<name_size$}{mode:06o} \0{user_id:06o} \0{group_id:06o} \0{size:011o} {modified_time:011o} {checksum:06o}\0 {typeflag}{linkname:\0<100}{magic:\0<6}{version:02}{username:\0<32}{group_name:\0<32}{dev_major:06o} \0{dev_minor:06o} \0{prefix:\0<prefix_size$}",
+            "{name:\0<name_size$}{mode:06o} \0{user_id:06o} \0{group_id:06o} \0{size:011o} {modified_time:011o} {checksum}{typeflag}{linkname:\0<100}{magic:\0<6}{version:02}{username:\0<32}{group_name:\0<32}{dev_major:06o} \0{dev_minor:06o} \0{prefix:\0<prefix_size$}",
             name = self.name,
             name_size = NAME_SIZE,
             mode = self.mode,
@@ -115,7 +115,7 @@ impl TarRecord {
             group_id = self.group_id,
             size = self.size,
             modified_time = self.modified_time,
-            checksum = 0,
+            checksum = "        ",
             typeflag = self.type_flag as u8,
             linkname = self.linkname,
             magic = TAR_MAGIC,
@@ -129,10 +129,12 @@ impl TarRecord {
         )?;
 
         let sum: u64 = vec_writer.iter().map(|&x| x as u64).sum();
+
         let mut checksum: Vec<u8> = Vec::new();
-        // FIXME: Due to an off-by-one error somewhere above, the checksum is always too high.
-        // For now, manually subtract 64 from the sum to get a valid checksum.
-        write!(checksum, "{:06o}\0 ", sum - 64)?;
+        write!(checksum, "{:06o}\0 ", sum)?;
+
+        println!("Length is {}", vec_writer[148..156].len());
+        println!("Length is {}", checksum[0..].len());
 
         vec_writer[148..156].swap_with_slice(&mut checksum[0..]);
         writer.write_all(&vec_writer)?;
