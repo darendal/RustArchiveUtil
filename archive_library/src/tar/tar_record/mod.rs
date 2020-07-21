@@ -143,19 +143,6 @@ impl TarRecord {
     }
 }
 
-bitflags! {
-    struct Mode: u64 {
-        const SET_UID = 0o04000;
-        const SET_GID = 0o02000;
-        const READ_BY_OWNER = 0o00400;
-        const WRITE_BY_OWNER = 0o00200;
-        const READ_BY_GROUP = 0o00040;
-        const WRITE_BY_GROUP = 0o00020;
-        const READ_BY_OTHER = 0o00004;
-        const WRITE_BY_OTHER = 0o00002;
-    }
-}
-
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 #[allow(dead_code)]

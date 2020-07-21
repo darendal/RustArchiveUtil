@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate bitflags;
-
 use walkdir::DirEntry;
 
 pub mod tar;
