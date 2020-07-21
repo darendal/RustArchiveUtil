@@ -86,7 +86,7 @@ impl TarRecord {
         loop {
             let buf = reader.fill_buf()?;
             let len = buf.len();
-            if buf.len() == 0 {
+            if buf.is_empty() {
                 break;
             }
             writer.write_all(buf)?;
@@ -98,7 +98,7 @@ impl TarRecord {
             write!(writer, "{:\0<size$}", "", size = residual)?;
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn write_header(&self, writer: &mut impl Write) -> Result<(), io::Error> {
@@ -134,7 +134,7 @@ impl TarRecord {
         // For now, manually subtract 64 from the sum to get a valid checksum.
         write!(checksum, "{:06o}\0 ", sum - 64)?;
 
-        &mut vec_writer[148..156].swap_with_slice(&mut checksum[0..]);
+        vec_writer[148..156].swap_with_slice(&mut checksum[0..]);
         writer.write_all(&vec_writer)?;
 
         // Header is exactly 12 bytes shy of a single block.

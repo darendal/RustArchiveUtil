@@ -38,7 +38,7 @@ impl Tar {
             return Tar { files };
         }
 
-        let record = TarRecord::new(path.clone(), root);
+        let record = TarRecord::new(path, root);
 
         Tar {
             files: vec![record],
