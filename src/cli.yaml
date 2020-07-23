@@ -1,0 +1,23 @@
+name: rau
+version: "1.0"
+author: Brendan W
+about: Simple archive utility
+subcommands:
+  - tar:
+      about: Create a tar file
+      version: "1.0"
+      args:
+        - input:
+            short: i
+            long: input
+            help: Sets the input file/directory
+            required: true
+            takes_value: true
+        - output:
+            short: o
+            long: output
+            help: Location to save the generated tar
+            required: false
+            takes_value: true
+
+

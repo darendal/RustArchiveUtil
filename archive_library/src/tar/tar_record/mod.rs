@@ -133,9 +133,6 @@ impl TarRecord {
         let mut checksum: Vec<u8> = Vec::new();
         write!(checksum, "{:06o}\0 ", sum)?;
 
-        println!("Length is {}", vec_writer[148..156].len());
-        println!("Length is {}", checksum[0..].len());
-
         vec_writer[148..156].swap_with_slice(&mut checksum[0..]);
         writer.write_all(&vec_writer)?;
 

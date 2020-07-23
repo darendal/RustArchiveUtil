@@ -1,44 +1,20 @@
+#[macro_use]
+extern crate clap;
 extern crate archive_library;
 
-use std::ffi::OsString;
+use clap::{App, ArgMatches};
 use std::path::{Path, PathBuf};
-use std::{env, process};
+use std::io;
 
 const UTIL_NAME: &str = "Rust Archive Util";
 
-fn main() {
-    let filepath = match fetch_path(env::args_os().collect()) {
-        None => {
-            eprintln!("{} - Missing Required argument <File path>", UTIL_NAME);
-            process::exit(1);
-        }
-        Some(path) => path,
-    };
-    let mut destination = filepath.clone();
-    if !valid_path(filepath.as_path()) {
-        eprintln!(
-            "{} - Parameter {:?}: File does not exist",
-            UTIL_NAME, filepath
-        );
-        process::exit(1);
-    }
+fn main() -> Result<(), io::Error> {
+    let yaml = load_yaml!("cli.yaml");
+    let matches = App::from_yaml(yaml).get_matches();
 
-    let tar = archive_library::tar::Tar::new(filepath);
-
-    match tar.write_tar(&mut destination) {
-        Ok(_) => process::exit(0),
-        Err(e) => {
-            eprintln!("Error writing tar: {}", e);
-            process::exit(1);
-        }
-    };
-}
-
-fn fetch_path(args: Vec<OsString>) -> Option<PathBuf> {
-    if args.len() < 2 {
-        None
-    } else {
-        Some(PathBuf::from(&args[1]))
+    match matches.subcommand() {
+        ("tar", Some(opts)) => subcommand_tar(opts),
+        _ => Ok(()),
     }
 }
 
@@ -46,30 +22,18 @@ fn valid_path(filepath: &Path) -> bool {
     filepath.exists()
 }
 
-#[test]
-fn fetch_path_test() {
-    let expected_none = fetch_path(Vec::new());
-    assert_eq!(expected_none, None);
+fn subcommand_tar(args: &ArgMatches) -> Result<(), io::Error> {
+    let filepath = PathBuf::from(args.value_of_os("input").unwrap());
+    let mut destination = filepath.clone();
 
-    let args: Vec<OsString> = vec![OsString::from("test"), OsString::from("test2")];
-
-    match fetch_path(args) {
-        None => assert!(false),
-        Some(p) => assert_eq!(p.as_path().as_os_str(), OsString::from("test2")),
+    if !valid_path(filepath.as_path()) {
+        eprintln!(
+            "{} - Parameter {:?}: File does not exist",
+            UTIL_NAME, filepath
+        );
     }
-}
 
-#[test]
-fn test_valid_path() {
-    let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    d.push("tests/resources");
+    let tar = archive_library::tar::Tar::new(filepath);
 
-    let mut valid = PathBuf::from(d.clone());
-    valid.push("test.txt");
-
-    let mut invalid = PathBuf::from(d);
-    invalid.push("invalid.txt");
-
-    assert_eq!(valid_path(valid.as_path()), true);
-    assert_eq!(valid_path(invalid.as_path()), false);
+    tar.write_tar(&mut destination)
 }

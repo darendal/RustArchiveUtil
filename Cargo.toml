@@ -10,3 +10,4 @@ edition = "2018"
 
 [dependencies]
 archive_library = { path = "archive_library" }
+clap = {version = "~2.27.0", features = ["yaml"]}
