@@ -27,14 +27,16 @@ pub struct TarRecord {
 
 impl TarRecord {
     pub fn new(path: PathBuf, root: &Path) -> TarRecord {
-        let name = path
+        let mut name = path
             .strip_prefix(root)
             .unwrap()
             .to_str()
             .unwrap()
             .to_string();
 
-        println!("a {}", name);
+        if path.is_dir() {
+            name.push('/');
+        }
 
         let file = File::open(path.clone()).unwrap();
         let metadata = file.metadata().unwrap();
@@ -75,10 +77,12 @@ impl TarRecord {
         self.write_header(writer)?;
 
         if self.type_flag != TypeFlag::Directory {
-            self.write_file(writer)
-        } else {
-            Ok(())
+            self.write_file(writer)?
         }
+
+        println!("a {}", self.name);
+
+        Ok(())
     }
 
     fn write_file(&self, writer: &mut impl Write) -> Result<(), io::Error> {

@@ -22,26 +22,10 @@ pub struct Tar {
 }
 
 impl Tar {
-    pub fn new(path: PathBuf) -> Tar {
-        let mut root = path.clone();
-        root.pop();
-        let root = root.as_path();
-
-        if path.is_dir() {
-            let files: Vec<TarRecord> = WalkDir::new(path)
-                .into_iter()
-                .filter_entry(|e| !crate::is_hidden(e))
-                .filter_map(|e| e.ok())
-                .map(|file| TarRecord::new(file.into_path(), root))
-                .collect();
-
-            return Tar { files };
-        }
-
-        let record = TarRecord::new(path, root);
-
-        Tar {
-            files: vec![record],
+    pub fn new(path: PathBuf, mode: TarMode) -> Tar {
+        match mode {
+            TarMode::Create => Tar::create(path),
+            m => panic!("Unsupported mode: {:?}", m),
         }
     }
 
@@ -59,4 +43,34 @@ impl Tar {
 
         writer.flush()
     }
+
+    fn create(path: PathBuf) -> Tar {
+        let mut root = path.clone();
+        root.pop();
+        let root = root.as_path();
+
+        if path.is_dir() {
+            let files: Vec<TarRecord> = WalkDir::new(path)
+                .into_iter()
+                .filter_entry(|e| !crate::is_hidden(e))
+                .filter_map(|e| e.ok())
+                .map(|file| TarRecord::new(file.into_path(), root))
+                .collect();
+
+            Tar { files }
+        } else {
+            let record = TarRecord::new(path, root);
+
+            Tar {
+                files: vec![record],
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum TarMode {
+    Create,
+    Extract,
+    Append,
 }

@@ -19,5 +19,23 @@ subcommands:
             help: Location to save the generated tar
             required: false
             takes_value: true
+        - create:
+              short: c
+              long: create
+              help: "[Default] create a new tar file, overwriting any existing file(s) of the same name"
+              required: false
+              takes_value: false
+        - append:
+              short: a
+              long: append
+              help: append any files at input to the tarfile at output. If not tarfile is present, creates a new tar
+              required: false
+              takes_value: false
+        - extract:
+              short: x
+              long: extract
+              help: extract the contents of the tarfile at input and writes them to output location (or input location)
+              required: false
+              takes_value: false
 
 
