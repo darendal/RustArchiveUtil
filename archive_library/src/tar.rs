@@ -45,10 +45,10 @@ impl Tar {
         }
     }
 
-    pub fn write_tar(&self, path: &mut PathBuf) -> Result<(), io::Error> {
-        let result_path = path;
+    pub fn write_tar(&self, path: &PathBuf) -> Result<(), io::Error> {
+        let mut result_path = path.clone();
         result_path.set_extension("tar");
-        let mut writer = BufWriter::new(File::create(result_path).unwrap());
+        let mut writer = BufWriter::new(File::create(result_path)?);
 
         for record in self.files.iter() {
             record.write_record(&mut writer)?

@@ -24,7 +24,6 @@ fn valid_path(filepath: &Path) -> bool {
 
 fn subcommand_tar(args: &ArgMatches) -> Result<(), io::Error> {
     let filepath = PathBuf::from(args.value_of_os("input").unwrap());
-    let mut destination = filepath.clone();
 
     if !valid_path(filepath.as_path()) {
         eprintln!(
@@ -33,7 +32,16 @@ fn subcommand_tar(args: &ArgMatches) -> Result<(), io::Error> {
         );
     }
 
+    let mut destination = match args.value_of_os("output") {
+        Some(o) => PathBuf::from(o),
+        None => filepath.clone()
+    };
+
+    if destination.is_dir() {
+        destination.push(filepath.file_stem().unwrap())
+    }
+
     let tar = archive_library::tar::Tar::new(filepath);
 
-    tar.write_tar(&mut destination)
+    tar.write_tar(&destination)
 }
