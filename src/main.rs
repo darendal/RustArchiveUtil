@@ -43,6 +43,6 @@ fn subcommand_tar(args: &ArgMatches) -> Result<(), io::Error> {
             let tar = archive_library::tar::Tar::new(filepath, mode);
             tar.write_tar(&destination)
         }
-        TarMode::Extract => Ok(()),
+        TarMode::Extract => archive_library::tar::Tar::extract(filepath, &destination),
     }
 }

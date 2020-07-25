@@ -1,8 +1,8 @@
 use crate::tar::tar_record::TarRecord;
 use std::fs::File;
-use std::io;
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
+use std::{fs, io};
 use walkdir::WalkDir;
 
 const TAR_MAGIC: &str = "ustar\0";
@@ -11,9 +11,6 @@ const DEV_MAJOR_VERSION: u64 = 0o0;
 const DEV_MINOR_VERSION: u64 = 0o0;
 
 const BLOCK_SIZE: usize = 512;
-
-const NAME_SIZE: usize = 100;
-const PREFIX_SIZE: usize = 155;
 
 mod tar_record;
 
@@ -65,6 +62,40 @@ impl Tar {
                 files: vec![record],
             }
         }
+    }
+
+    pub fn extract(input: PathBuf, output: &PathBuf) -> Result<(), io::Error> {
+        if input.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Expected tar file, found directory",
+            ));
+        };
+
+        match input.extension() {
+            Some(ext) => {
+                if ext.ne("tar") {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Expected tar file, found {}", ext.to_string_lossy()),
+                    ));
+                }
+            }
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "input file missing extension. Unknown if is a tar file",
+                ))
+            }
+        };
+
+        let file = File::open(input)?;
+        let mut reader = BufReader::new(file);
+
+        fs::create_dir_all(&output)?;
+
+        TarRecord::new_from_file(&mut reader, output)?;
+        Ok(())
     }
 }
 
