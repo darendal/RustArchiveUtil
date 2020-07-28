@@ -219,7 +219,7 @@ impl TarRecord {
         if checksum != sum {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "Checksum is invalid. File may be corrupted.`",
+                "Checksum is invalid. File may be corrupted.",
             ));
         }
 
