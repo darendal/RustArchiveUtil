@@ -4,10 +4,9 @@ extern crate archive_library;
 
 use archive_library::tar::TarMode;
 use clap::{App, ArgMatches};
-use std::io;
 use std::path::PathBuf;
 
-fn main() -> Result<(), io::Error> {
+fn main() -> archive_library::error::Result<()> {
     let yaml = load_yaml!("cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
@@ -17,7 +16,7 @@ fn main() -> Result<(), io::Error> {
     }
 }
 
-fn subcommand_tar(args: &ArgMatches) -> Result<(), io::Error> {
+fn subcommand_tar(args: &ArgMatches) -> archive_library::error::Result<()> {
     let filepath = PathBuf::from(args.value_of_os("input").unwrap());
 
     let mut destination = match args.value_of_os("output") {

@@ -1,8 +1,10 @@
+use crate::error::tar_error;
+use crate::error::Result;
 use crate::tar::tar_record::TarRecord;
+use std::fs;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
-use std::{fs, io};
 use walkdir::WalkDir;
 
 const TAR_MAGIC: &str = "ustar\0";
@@ -26,7 +28,12 @@ impl Tar {
         }
     }
 
-    pub fn write_tar(&self, path: &PathBuf) -> Result<(), io::Error> {
+    pub fn write_tar(&self, path: &PathBuf) -> Result<()> {
+        self._write_tar(path)?;
+        Ok(())
+    }
+
+    fn _write_tar(&self, path: &PathBuf) -> tar_error::Result<()> {
         let mut result_path = path.clone();
         result_path.set_extension("tar");
         let mut writer = BufWriter::new(File::create(result_path)?);
@@ -38,7 +45,9 @@ impl Tar {
         // write 2 empty blocks to signify end of TAR
         write!(writer, "{:\0<size$}", "", size = BLOCK_SIZE * 2)?;
 
-        writer.flush()
+        writer.flush()?;
+
+        Ok(())
     }
 
     fn create(path: PathBuf) -> Tar {
@@ -64,10 +73,15 @@ impl Tar {
         }
     }
 
-    pub fn extract(input: PathBuf, output: &PathBuf) -> Result<(), io::Error> {
+    pub fn extract(input: PathBuf, output: &PathBuf) -> Result<()> {
+        Self::_extract(input, output)?;
+        Ok(())
+    }
+
+    fn _extract(input: PathBuf, output: &PathBuf) -> tar_error::Result<()> {
         if input.is_dir() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
+            return Err(tar_error::TarError::new(
+                tar_error::TarErrorKind::InvalidFormatDirectory,
                 "Expected tar file, found directory",
             ));
         };
@@ -75,15 +89,15 @@ impl Tar {
         match input.extension() {
             Some(ext) => {
                 if ext.ne("tar") {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
+                    return Err(tar_error::TarError::new(
+                        tar_error::TarErrorKind::InvalidFormatWrongExtension,
                         format!("Expected tar file, found {}", ext.to_string_lossy()),
                     ));
                 }
             }
             None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
+                return Err(tar_error::TarError::new(
+                    tar_error::TarErrorKind::InvalidFormatMissingExtension,
                     "input file missing extension. Unknown if is a tar file",
                 ))
             }
@@ -94,7 +108,18 @@ impl Tar {
 
         fs::create_dir_all(&output)?;
 
-        TarRecord::new_from_file(&mut reader, output)?;
+        let mut empty_blocks = 0u8;
+        while empty_blocks < 2 {
+            match TarRecord::new_from_file(&mut reader, output) {
+                Ok(_) => {}
+                Err(e) => {
+                    if let tar_error::TarErrorKind::EmptyHeaderBlock = e.kind {
+                        empty_blocks += 1
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }

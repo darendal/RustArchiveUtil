@@ -1,6 +1,8 @@
+use crate::error::tar_error;
+use crate::error::tar_error::{TarError, TarErrorKind};
 use crate::tar::{BLOCK_SIZE, DEV_MAJOR_VERSION, DEV_MINOR_VERSION, TAR_MAGIC, TAR_VERSION};
 use filetime::FileTime;
-use std::fs::{File};
+use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::os::macos::fs::MetadataExt;
@@ -184,44 +186,24 @@ impl TarRecord {
         write!(writer, "{:\0<size$}", "", size = 12)
     }
 
-    pub fn new_from_file(reader: &mut impl Read, output: &PathBuf) -> Result<(), io::Error> {
+    pub fn new_from_file(
+        reader: &mut impl Read,
+        output: &PathBuf,
+    ) -> tar_error::Result<ReadResult> {
         let record = TarRecord::read_header(reader)?;
         record.extract_file(reader, &mut output.clone())
     }
 
-    fn read_header(reader: &mut impl Read) -> Result<TarRecord, io::Error> {
+    fn fetch_header(reader: &mut impl Read) -> tar_error::Result<[u8; 512]> {
         let mut header_block = [0; crate::tar::BLOCK_SIZE];
+        reader.read_exact(&mut header_block)?;
+        Ok(header_block)
+    }
 
-        reader.read_exact(&mut header_block).unwrap();
+    fn read_header(reader: &mut impl Read) -> tar_error::Result<TarRecord> {
+        let mut header_block = TarRecord::fetch_header(reader)?;
 
-        let magic =
-            String::from_utf8_lossy(&header_block[MAGIC_OFFSET..(MAGIC_OFFSET + MAGIC_SIZE)]);
-
-        if magic.ne(crate::tar::TAR_MAGIC) {
-            // Something is wrong with the header
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "header corrupted, invalid magic value.",
-            ));
-        }
-
-        let checksum = String::from_utf8_lossy(
-            &header_block[CHECKSUM_OFFSET..(CHECKSUM_OFFSET + CHECKSUM_SIZE - 2)],
-        );
-        let checksum = u64::from_str_radix(&checksum, 8).unwrap();
-
-        // Replace checksum with default before checking if header is valid
-        header_block[CHECKSUM_OFFSET..(CHECKSUM_SIZE + CHECKSUM_OFFSET)]
-            .copy_from_slice(CHECKSUM_DEFAULT.as_bytes());
-
-        let sum: u64 = header_block.iter().map(|&x| x as u64).sum();
-
-        if checksum != sum {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Checksum is invalid. File may be corrupted.",
-            ));
-        }
+        TarRecord::validate_header(&mut header_block)?;
 
         let name = String::from_utf8_lossy(&header_block[NAME_OFFSET..(NAME_SIZE + NAME_OFFSET)]);
         let mode = u32::from_str_radix(
@@ -286,7 +268,51 @@ impl TarRecord {
         })
     }
 
-    fn extract_file(&self, reader: &mut impl Read, output: &mut PathBuf) -> Result<(), io::Error> {
+    fn validate_header(header_block: &mut [u8; 512]) -> tar_error::Result<()> {
+        let magic =
+            String::from_utf8_lossy(&header_block[MAGIC_OFFSET..(MAGIC_OFFSET + MAGIC_SIZE)]);
+
+        if magic.ne(crate::tar::TAR_MAGIC) {
+            //check if whole block is empty
+            if header_block.iter().all(|&x| x == b'\0') {
+                return Err(TarError::new(
+                    TarErrorKind::EmptyHeaderBlock,
+                    "Header block is empty",
+                ));
+            }
+            // Something is wrong with the header
+            return Err(TarError::new(
+                TarErrorKind::InvalidMagicValue,
+                "Magic value is invalid",
+            ));
+        }
+
+        let checksum = String::from_utf8_lossy(
+            &header_block[CHECKSUM_OFFSET..(CHECKSUM_OFFSET + CHECKSUM_SIZE - 2)],
+        );
+        let checksum = u64::from_str_radix(&checksum, 8).unwrap();
+
+        // Replace checksum with default before checking if header is valid
+        header_block[CHECKSUM_OFFSET..(CHECKSUM_SIZE + CHECKSUM_OFFSET)]
+            .copy_from_slice(CHECKSUM_DEFAULT.as_bytes());
+
+        let sum: u64 = header_block.iter().map(|&x| x as u64).sum();
+
+        if checksum != sum {
+            return Err(TarError::new(
+                TarErrorKind::InvalidChecksum,
+                "Checksum is invalid",
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn extract_file(
+        &self,
+        reader: &mut impl Read,
+        output: &mut PathBuf,
+    ) -> tar_error::Result<ReadResult> {
         output.push(Path::new(&self.name));
 
         if self.type_flag == TypeFlag::Directory {
@@ -301,6 +327,10 @@ impl TarRecord {
         let mut permissions = file.metadata()?.permissions();
         permissions.set_mode(self.mode);
         file.set_permissions(permissions)?;
+
+        if self.type_flag == TypeFlag::Directory {
+            return Ok(ReadResult::DirectoryCreated);
+        }
 
         let mut writer = BufWriter::new(file);
 
@@ -322,7 +352,7 @@ impl TarRecord {
         writer.flush()?;
 
         filetime::set_file_mtime(&output, FileTime::from_unix_time(self.modified_time, 0))?;
-        Ok(())
+        Ok(ReadResult::FileCreated)
     }
 }
 
@@ -333,4 +363,9 @@ enum TypeFlag {
     ARegFile = b'\0',
     Link = 1,
     Directory = 5,
+}
+
+pub enum ReadResult {
+    FileCreated,
+    DirectoryCreated,
 }

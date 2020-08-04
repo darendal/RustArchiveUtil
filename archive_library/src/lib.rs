@@ -1,5 +1,6 @@
 use walkdir::DirEntry;
 
+pub mod error;
 pub mod tar;
 
 fn is_hidden(entry: &DirEntry) -> bool {
